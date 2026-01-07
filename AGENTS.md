@@ -1,127 +1,136 @@
 # AGENTS.md
 
-This file provides guidance to AI coding agents working in this repository.
+**Generated:** 2026-01-07 | **Commit:** fada563c1 | **Branch:** main
 
-## Project Overview
+## Overview
 
-This is the **Cloudflare Workers SDK** monorepo containing tools and libraries for developing, testing, and deploying applications on Cloudflare. The main components are Wrangler (CLI), Miniflare (local dev simulator), and Create Cloudflare (project scaffolding).
+Cloudflare Workers SDK monorepo: CLI tools + libraries for Workers development. Core: Wrangler (CLI), Miniflare (local simulator), C3 (scaffolding), Vite plugin.
 
-## Development Commands
+## Structure
 
-**Package Management:**
+```
+workers-sdk/
+├── packages/
+│   ├── wrangler/              # Main CLI (see packages/wrangler/AGENTS.md)
+│   ├── miniflare/             # Local workerd simulator (see AGENTS.md)
+│   ├── vite-plugin-cloudflare/# Vite integration (see AGENTS.md)
+│   ├── create-cloudflare/     # C3 scaffolding (see AGENTS.md)
+│   ├── vitest-pool-workers/   # Test in workerd (see AGENTS.md)
+│   ├── workers-shared/        # Shared: asset-worker + router-worker
+│   ├── pages-shared/          # Pages asset serving
+│   ├── workers-utils/         # Config parsing, errors, types
+│   ├── cli/                   # Prompts, spinners, UI primitives
+│   └── ...                    # 20+ more packages
+├── fixtures/                  # 75+ integration test apps (see AGENTS.md)
+├── tools/                     # CI scripts, deployments, validation
+└── turbo.json                 # Build orchestration
+```
 
-- Use `pnpm` - never use npm or yarn
-- `pnpm install` - Install dependencies for all packages
-- `pnpm build` - Build all packages (uses Turbo for caching)
+## Commands
 
-**Testing:**
+```bash
+pnpm install                    # Install all deps (NEVER npm/yarn)
+pnpm build                      # Build all (Turbo cached)
+pnpm check                      # Lint + typecheck + format
+pnpm fix                        # Auto-fix lint/format
+pnpm test:ci                    # Run tests
+pnpm test -F wrangler "pattern" # Single test by name
+pnpm --filter <pkg> test:watch  # Watch mode
+```
 
-- `pnpm test:ci` - Run tests in CI mode
-- `pnpm test:e2e` - Run end-to-end tests (requires Cloudflare credentials)
-- `pnpm test -F <package> "pattern"` - Run a single test by name pattern
+## Code Style (Enforced)
 
-**Code Quality:**
+| Rule                    | Enforcement                                |
+| ----------------------- | ------------------------------------------ |
+| Tabs not spaces         | `.editorconfig`, Prettier                  |
+| `import type { X }`     | ESLint `consistent-type-imports`           |
+| No `any`                | `@typescript-eslint/no-explicit-any`       |
+| No `!` assertions       | `@typescript-eslint/no-non-null-assertion` |
+| Await all promises      | `@typescript-eslint/no-floating-promises`  |
+| Always `{}` braces      | `curly: error`                             |
+| `node:` prefix          | `import/enforce-node-protocol-usage`       |
+| Unused vars: `_` prefix | `@typescript-eslint/no-unused-vars`        |
+| No `.only()` in tests   | `no-only-tests/no-only-tests`              |
 
-- `pnpm check` - Run all checks (lint, type, format)
-- `pnpm fix` - Auto-fix linting issues and format code
+## Anti-Patterns (This Project)
 
-**Working with Specific Packages:**
+- **Service environments**: DEPRECATED, will be removed
+- **`build.upload`**: Legacy v1 - use `main` field
+- **Global `fetch`**: Use undici in Wrangler (restricted global)
+- **`__dirname`/`__filename`**: Use `getBasePath()` in Wrangler
+- **Major version bumps**: Forbidden for wrangler (changeset validation)
+- **Workers deploy packages**: Currently blocked - manual deploy only
 
-- `pnpm run build --filter <package-name>` - Build specific package
-- `pnpm run test:ci --filter <package-name>` - Test specific package
-- `pnpm --filter <package> test:watch` - Watch mode for a specific package
+## Build System
 
-## Architecture Overview
+- **Turbo**: Remote cache with signatures, task dependencies
+- **pnpm catalogs**: Centralized versions (`catalog:default`)
+- **TypeScript**: `bundler` moduleResolution, `alwaysStrict: false`
+- **Vitest**: `pool: forks`, 15-50s timeouts, `retry: 2` for flaky tests
 
-**Core Tools:**
+## Testing
 
-- `packages/wrangler/` - Main CLI tool for Workers development and deployment
-- `packages/miniflare/` - Local development simulator powered by workerd runtime
-- `packages/create-cloudflare/` - Project scaffolding CLI (C3)
-- `packages/vite-plugin-cloudflare/` - Vite plugin for Cloudflare Workers
+| Type        | Location                    | Pattern                |
+| ----------- | --------------------------- | ---------------------- |
+| Unit        | `packages/*/src/__tests__/` | Vitest, MSW mocks      |
+| Integration | `fixtures/*/tests/`         | Long-lived dev servers |
+| E2E         | `packages/*/e2e/`           | Real CF credentials    |
+| Runtime     | vitest-pool-workers         | Tests run IN workerd   |
 
-**Development & Testing:**
+## CI/Deployment
 
-- `packages/vitest-pool-workers/` - Vitest integration for testing Workers in actual runtime
-- `packages/chrome-devtools-patches/` - Modified Chrome DevTools for Workers debugging
+- **Changesets**: Required for all published package changes
+- **Prerelease**: `pkg-pr-new` publishes PR packages
+- **Worker deploys**: `workers-shared` uses `versions upload` with git tags
+- **Hotfix**: Manual workflow bypasses changesets
+- **External PRs**: Team member triggers CI via proxy workflow
 
-**Shared Libraries:**
+## Key Patterns
 
-- `packages/pages-shared/` - Code shared between Wrangler and Cloudflare Pages
-- `packages/workers-shared/` - Code shared between Wrangler and Workers Assets
-- `packages/workers-utils/` - Utility package for common Worker operations
-- `packages/workflows-shared/` - Internal Cloudflare Workflows functionality
-- `packages/containers-shared/` - Shared container functionality
-- `packages/unenv-preset/` - Cloudflare preset for unenv (Node.js polyfills)
-- `packages/cli/` - SDK for building workers-sdk CLIs
-- `packages/kv-asset-handler/` - KV-based asset handling for Workers Sites
+### Workspace Dependencies
 
-**Build System:**
+```json
+"wrangler": "workspace:*",
+"@cloudflare/workers-tsconfig": "workspace:^",
+"vitest": "catalog:default"
+```
 
-- Turbo (turborepo) orchestrates builds across packages
-- TypeScript compilation with shared configs in `packages/workers-tsconfig/`
-- Shared ESLint config in `packages/eslint-config-shared/`
-- Dependency management via pnpm catalog system
+### Miniflare Version Sync
 
-## Development Guidelines
+Custom script forces Miniflare minor = workerd minor version. Prevents drift.
 
-**Requirements:**
+### Package Metadata
 
-- Node.js >= 20
-- pnpm
+```json
+"workers-sdk": { "prerelease": true, "deploy": true }
+```
 
-**Code Style:**
+Controls prerelease publishing and worker deployment behavior.
 
-- TypeScript with strict mode
-- Use `import type { X }` for type-only imports (`@typescript-eslint/consistent-type-imports`)
-- No `any` (`@typescript-eslint/no-explicit-any`)
-- No non-null assertions (`!`)
-- No floating promises - must be awaited or explicitly voided (`@typescript-eslint/no-floating-promises`)
-- Always use curly braces for control flow (`curly: error`)
-- Use `node:` prefix for Node.js imports (`import/enforce-node-protocol-usage`)
-- Prefix unused variables with `_`
-- No `.only()` in tests (`no-only-tests/no-only-tests`)
-- Format with Prettier - run `pnpm prettify` in the workspace root before committing
-- All changes to published packages require a changeset (see below)
+## Where to Look
 
-**Testing Standards:**
+| Task                 | Location                                     |
+| -------------------- | -------------------------------------------- |
+| Add Wrangler command | `packages/wrangler/src/` + `CommandRegistry` |
+| Add binding type     | `packages/miniflare/src/plugins/`            |
+| Add C3 template      | `packages/create-cloudflare/templates/`      |
+| Add Vite feature     | `packages/vite-plugin-cloudflare/src/`       |
+| Test Workers runtime | `packages/vitest-pool-workers/`              |
+| Integration test     | `fixtures/` (create new fixture)             |
 
-- Unit tests with Vitest for all packages
-- Fixture tests in `/fixtures` directory for filesystem/Worker scenarios
-- E2E tests require real Cloudflare account credentials
-- Use `vitest-pool-workers` for testing actual Workers runtime behavior
+## Gotchas
 
-**Git Workflow:**
+1. **Fixtures are workspace packages**: Listed in `pnpm-workspace.yaml`, must be `private: true`
+2. **Tools is a package**: Has own tests, linting, type-checking
+3. **Nested workspaces**: vite-plugin playgrounds are separate workspace members
+4. **Config validation**: `lint-turbo.mjs` validates turbo.json ↔ vitest configs match
+5. **Windows CI**: 50s test timeouts, smart-tabs for mixed indentation
 
-- Check you are not on main before committing. Create a new branch for your work from main if needed.
-- Clean commit history required before first review
-- Never commit without changesets for user-facing changes
-- PR template requirements: Remove "Fixes #..." line when no relevant issue exists, keep all checkboxes (don't delete unchecked ones)
+## Subdirectory AGENTS.md
 
-**Creating Pull Requests:**
-
-- Always use the PR template from `.github/pull_request_template.md`
-- PR title format: `[package name] description` (e.g. `[wrangler] Fix bug in dev command`)
-- If the change doesn't require a changeset, add the `no-changeset-required` label
-
-## Key Locations
-
-- `/fixtures` - Test fixtures and example applications
-- `/packages/wrangler/src` - Main Wrangler CLI source code
-- `/packages/miniflare/src` - Miniflare source
-- `/tools` - Build scripts and deployment utilities
-- `turbo.json` - Turbo build configuration
-- `pnpm-workspace.yaml` - Workspace configuration
-
-## Testing Strategy
-
-**Package-specific tests:** Most packages have their own test suites
-**Integration tests:** Use fixtures to test real-world scenarios
-**E2E tests:** Test against actual Cloudflare services (requires auth)
-**Workers runtime tests:** Use vitest-pool-workers for workerd-specific behavior
-
-Run `pnpm check` before submitting changes to ensure all quality gates pass.
-
-## Changesets
-
-Every change to package code requires a changeset or it will not trigger a release. Read `.changeset/README.md` before creating changesets.
+- `packages/wrangler/AGENTS.md` - CLI architecture, command system
+- `packages/miniflare/AGENTS.md` - Plugin system, workerd integration
+- `packages/vite-plugin-cloudflare/AGENTS.md` - Vite environments, HMR
+- `packages/create-cloudflare/AGENTS.md` - Template system, c3.ts
+- `packages/vitest-pool-workers/AGENTS.md` - Custom pool, storage isolation
+- `fixtures/AGENTS.md` - Test fixture patterns
